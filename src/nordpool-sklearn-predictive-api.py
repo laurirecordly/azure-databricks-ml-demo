@@ -220,14 +220,11 @@ y = Xy["Next Price"]
 
 # COMMAND ----------
 
-#experiment_name = "/Users/lauri.lehtovaara@recordlydata.com/experiment/nordpool-sklearn-predictive-api"
-#experiment_id = mlflow.get_experiment_by_name(experiment_name) or mlflow.create_experiment(experiment_name)
-
-# enable MLflow autologging
+# enable MLflow autologging for model metrics
 mlflow.sklearn.autolog()
 
 # start MLflow run
-with mlflow.start_run(experiment_id=experiment_id) as run:
+with mlflow.start_run() as run:
     model = pipeline.fit(X,y)
     model_info = mlflow.sklearn.log_model(
         sk_model=model, 
@@ -267,6 +264,9 @@ plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # eve
 
 # COMMAND ----------
 
-# Go to Experiments and select this experiment
-# Select the model
-# 
+# Go to 'Experiments' tab and select this experiment 'nordpool-sklearn-predictive-api'
+# Select this run (the latest?) and click the model and examine it
+# Press 'Register model', select Workspace Model Registry and 'nordpool' model
+# Go to 'Serving' tab and select 'nordpool' endpoint
+# Click 'Edit configuration' ...
+
