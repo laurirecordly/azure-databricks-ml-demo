@@ -9,32 +9,31 @@
 
 # MAGIC %md
 # MAGIC # ToDo
-# MAGIC - Kuvaaja
 # MAGIC - Unity Catalog
-# MAGIC - Siivous
-# MAGIC - Nimi
-# MAGIC - Autolog
-# MAGIC - pip install git
 
 # COMMAND ----------
 
-# MAGIC %pip install mlflow
-
-# COMMAND ----------
-
-dbutils.library.restartPython()
-
-# COMMAND ----------
-
-# Read data
-
+# Read and plot data
 import pandas as pd
+import seaborn as sns
+import matplotlib
+import matplotlib.pyplot as plt
 
+# read
 # original source csv_url = "https://zenodo.org/record/4624805/files/NP.csv"
 csv_url = "file:../data/NP.csv"
 df = pd.read_csv(csv_url) # read csv
 df = df.rename(columns=(lambda col_name: col_name.strip())) # clean up column names
 df.display()
+
+# plot
+fig = plt.figure()
+sns.lineplot(x=pd.to_datetime(df["Date"]), y=df["Price"])
+fig = plt.figure()
+N_plot = 30*24
+sns.lineplot(x=pd.to_datetime(df["Date"])[-N_plot:], y=df["Price"][-N_plot:])
+plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date
+
 
 # COMMAND ----------
 
@@ -49,11 +48,6 @@ from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.linear_model import TheilSenRegressor
 
-# numpy and pandas
-import numpy as np
-import pandas as pd
-from numpy.typing import ArrayLike
-
 # mlflow
 import mlflow
 from mlflow.models import infer_signature
@@ -63,7 +57,7 @@ from mlflow.types.schema import Schema, ColSpec, TensorSpec
 
 # COMMAND ----------
 
-
+# Example of an API call from a tutorial
 """
   {
     "dataframe_split": [{
@@ -73,6 +67,8 @@ from mlflow.types.schema import Schema, ColSpec, TensorSpec
     }]
   }
 """
+
+# COMMAND ----------
 
 test_df = pd.DataFrame({
     "Date": [
@@ -109,27 +105,44 @@ test_df = pd.DataFrame({
     ]
 })
 
+# COMMAND ----------
 
-
+# TimedeltaInterval describe time interval relative to some reference time, 
+# typically the latest time in time-series
 @dataclass
 class TimedeltaInterval:
     beg: pd.Timedelta
     end: pd.Timedelta
 
+# COMMAND ----------
+
+# The time-intervals we are interested in
+timedelta_intervals = {
+    "Current time": TimedeltaInterval(pd.Timedelta("-1s"), pd.Timedelta("1s")),
+    "Last hour": TimedeltaInterval(pd.Timedelta("-1h"), pd.Timedelta("0s")),
+    "Last 4 hours": TimedeltaInterval(pd.Timedelta("-4h"), pd.Timedelta("0s")),
+    "Last day": TimedeltaInterval(pd.Timedelta("-1d"), pd.Timedelta("0s")),
+    "Last week": TimedeltaInterval(pd.Timedelta("-7d"), pd.Timedelta("0s"))
+}
+
+
+# COMMAND ----------
+
 @dataclass
 class LatestTimeIntervalAverageTransformer(BaseEstimator, TransformerMixin):
+    """Transforms a time-series to sets of time-intervals relative to the latest time in the input time-series
+    
+    For example, takes two weeks of Time-Price pairs and converts to Last week, Last day, Last 4 hour average prices, and Last and Current hour prices."""
     timedelta_intervals: Dict[str,TimedeltaInterval]
-                         
-    def fit(self, X, y=None):
-        return self
 
-    def interval_mean_price(
+    def _interval_mean_price(
         self,
         timestamps: List[pd.Timestamp], 
         prices: List[float], 
         ref_time: pd.Timestamp, 
         timedelta_interval: TimedeltaInterval,
     ) -> float:
+        """Calculates mean price for an time interval relative to a reference time"""
         df = pd.DataFrame({ "Timestamp": timestamps, "Price": prices })
         df = df[(
             (df["Timestamp"] >= ref_time + timedelta_interval.beg) &
@@ -138,14 +151,19 @@ class LatestTimeIntervalAverageTransformer(BaseEstimator, TransformerMixin):
         return df["Price"].mean()
 
     def transform(self, X: pd.DataFrame, y = None):
+        """Transforms the list of input time-series to a list of time-intervals."""
         # X = N x (datetime64, float)
         # find the latest timestamp
-        X["Timestamp"] = X.apply(lambda row : pd.to_datetime(row["Date"]).max(), axis = "columns")
+        Xt = X.copy(deep=True)
+        Xt["Timestamp"] = X.apply(
+            lambda row : pd.to_datetime(row["Date"]).max(), 
+            axis = "columns"
+        )
 
         # find rows that are between timedeltas with respect to the latest timestamp
         for col_name, timedelta_interval in self.timedelta_intervals.items():
-            X[col_name] = X.apply(
-                lambda row : self.interval_mean_price(
+            Xt[col_name] = Xt.apply(
+                lambda row : self._interval_mean_price(
                     pd.to_datetime(row["Date"]),
                     row["Price"],
                     row["Timestamp"],
@@ -153,80 +171,68 @@ class LatestTimeIntervalAverageTransformer(BaseEstimator, TransformerMixin):
                 ),
                 axis = "columns",
             )
-            
-        X = X.drop(columns=["Timestamp", "Date", "Price"])
-        return X 
+        
+        return Xt.drop(columns=["Timestamp", "Date", "Price"])
+    
+    def fit(self, X, y=None):
+        """Fit is pass-through for transformers"""
+        return self
 
 
-#for x in X.rolling(7*24*60*60, min_periods=7*24*60*60):
-#    print(len(x))
 
-timedelta_intervals = {
-    "Current time": TimedeltaInterval(pd.Timedelta("-1s"), pd.Timedelta("1s")),
-    "Last hour": TimedeltaInterval(pd.Timedelta("-1h"), pd.Timedelta("0s")),
-    "Last 4 hours": TimedeltaInterval(pd.Timedelta("-4h"), pd.Timedelta("0s")),
-    "Last day": TimedeltaInterval(pd.Timedelta("-1d"), pd.Timedelta("0s")),
-    "Last week": TimedeltaInterval(pd.Timedelta("-7d"), pd.Timedelta("0s"))
-}
+# COMMAND ----------
+
+# pipeline with preprocessor and Theil Sen regressor (similar to linear regression)
 pipeline = Pipeline(steps=[
     ("latest_time_interval_avgs", LatestTimeIntervalAverageTransformer(timedelta_intervals)),
     ("theil_sen_regressor", TheilSenRegressor())
 ])
 
+# COMMAND ----------
 
-N_samples = 1000
-N_window = 8*24
+# training params
+N_window = 8*24  # 8 days of training data with 1h frequency, only the last week is used
+N_samples = 1000 # 1000 random samples instead of the whole dataset
+
+# construct training data
 train_df = df.copy(deep=True)
-
-"""
-train_df = pd.DataFrame(
-    { 
-        "Date": test_df["Date"][0], 
-        "Price": test_df["Price"][0] 
-    }
-)
-N_window = 4
-"""
-
 windows = train_df.rolling(N_window)
-display(windows)
-windows = [window for window in windows if len(window) >= N_window]
-#for window in windows:
-#    display(window)
 
-Xyt = pd.DataFrame({
+display(windows)
+
+# take only windows that have full length
+windows = [window for window in windows if len(window) >= N_window]
+
+# take N_samples samples from input and target data
+# X = list of input time-series, N_samples x N_window x (Date, Price)
+# y = lists of targets, N_samples x Next Price
+Xy = pd.DataFrame({
     "Date": [window["Date"].values[:-1] for window in windows],
     "Price": [window["Price"].values[:-1] for window in windows],
     "Next Price": [window["Price"].values[-1] for window in windows]
 }).sample(N_samples)
-display(Xyt.shape)
-X = Xyt[["Date","Price"]]
-y = Xyt["Next Price"]
-display(X.dtypes)
+
+display(Xy.shape)
+
+X = Xy[["Date","Price"]]
+y = Xy["Next Price"]
 
 
-"""
-input_schema = Schema(
-    [
-        TensorSpec(np.dtype(np.float64), (-1, N_window), "Price"),
-        TensorSpec(np.dtype(str), (-1, N_window), "Date"),
-    ]
-)
-output_schema = Schema([TensorSpec(np.dtype(np.float64), (-1, 1))])
-signature = ModelSignature(inputs=input_schema, outputs=output_schema)
-"""
+# COMMAND ----------
 
-with mlflow.start_run() as run:
-    #autologgin päälle mlflowhun
-    # without .copy(deep=True) => wrong signature
-    model = pipeline.fit(X.copy(deep=True),y)
-    #signature = infer_signature(X.head(2), model.predict(X.head(2).copy(deep=True)))
-    #display(signature)
+#experiment_name = "/Users/lauri.lehtovaara@recordlydata.com/experiment/nordpool-sklearn-predictive-api"
+#experiment_id = mlflow.get_experiment_by_name(experiment_name) or mlflow.create_experiment(experiment_name)
+
+# enable MLflow autologging
+mlflow.sklearn.autolog()
+
+# start MLflow run
+with mlflow.start_run(experiment_id=experiment_id) as run:
+    model = pipeline.fit(X,y)
     model_info = mlflow.sklearn.log_model(
         sk_model=model, 
-        artifact_path="model", # unity catalog
-        #signature=signature,
-        input_example=X.head(2).copy(deep=True),
+        artifact_path="model", # ToDo: use unity catalog?
+        input_example=X.head(2),
     )
 # model_from_registry
 sklearn_pyfunc = mlflow.pyfunc.load_model(model_uri=model_info.model_uri)
@@ -240,21 +246,27 @@ display(results)
 
 # COMMAND ----------
 
-X[["Price","Date"]].head(1).reset_index(drop=True).to_json(orient="records")
+pred_windows = windows[-N_plot:]
+df_pred = pd.DataFrame({
+    "Date": [window["Date"].values[:-1] for window in pred_windows],
+    "Price": [window["Price"].values[:-1] for window in pred_windows],
+})
+df_pred["Pred Price"] = model.predict(df_pred)
+df_pred["Next Price"] = [window["Price"].values[-1] for window in pred_windows]
+df_pred["Last Date"] = [window["Date"].values[-1] for window in pred_windows]
+
+df_pred.display()
+
+fig = plt.figure()
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Next Price"][-N_plot:])
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:])
+plt.xlabel("Date")
+plt.ylabel("Price vs Fitted")
+plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date
+
 
 # COMMAND ----------
 
-X[["Price","Date"]].head(1).reset_index(drop=True).to_json(orient="records")
-
-# COMMAND ----------
-
-X[["Price","Date"]].iloc[0].to_dict()
-
-# COMMAND ----------
-
-    signature = infer_signature(X.head(2), model.predict(X.head(2).copy(deep=True)))
-
-
-# COMMAND ----------
-
-
+# Go to Experiments and select this experiment
+# Select the model
+# 
