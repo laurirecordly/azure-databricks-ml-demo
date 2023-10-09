@@ -1,4 +1,14 @@
 # Databricks notebook source
+# MAGIC %run ./data_helpers
+
+# COMMAND ----------
+
+csv_url = "https://zenodo.org/record/4624805/files/NP.csv"
+df = read_price_data(csv_url=csv_url)
+window_price_data(df)
+
+# COMMAND ----------
+
 import os
 
 from pyspark.sql import DataFrame
@@ -94,6 +104,8 @@ from pyspark.ml.feature import VectorAssembler
 
 lr_df = df.na.drop()
 
+# TODO: pipeline
+
 vectorAssembler = VectorAssembler(outputCol="features")
 vectorAssembler.setInputCols(["Price", "Prev Price"]) #"Rolling 4h Price", "Rolling Daily Price", "Rolling Weekly Price"])
 lr_df = vectorAssembler.transform(lr_df)
@@ -140,3 +152,22 @@ ax.set_ylim(0,50)
 # COMMAND ----------
 
 
+lr_df = df.na.drop()
+
+# TODO: pipeline
+
+vectorAssembler = VectorAssembler(outputCol="features")
+vectorAssembler.setInputCols(["Price", "Prev Price"]) #"Rolling 4h Price", "Rolling Daily Price", "Rolling Weekly Price"])
+lr_df = vectorAssembler.transform(lr_df)
+
+lr = LinearRegression(labelCol="Next Price", featuresCol="features")
+model = lr.fit(lr_df)
+lr_df_sq = model.transform(lr_df)
+
+display(lr_df_sq)
+
+lr_huber = LinearRegression(labelCol="Next Price", featuresCol="features", loss="huber")
+model = lr_huber.fit(lr_df)
+lr_df_huber = model.transform(lr_df)
+
+display(lr_df_huber)
