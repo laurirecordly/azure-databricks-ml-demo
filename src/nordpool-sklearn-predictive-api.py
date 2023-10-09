@@ -1,11 +1,20 @@
 # Databricks notebook source
-# Kuvaaja
-# Unity Catalog
-# Siivous
-# Nimi
-# Autolog
-# pip install git
+# MAGIC %md
+# MAGIC # Nordpool sklearn predictive API
+# MAGIC
+# MAGIC See [README.md](../README.md) for description.
+# MAGIC
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC # ToDo
+# MAGIC - Kuvaaja
+# MAGIC - Unity Catalog
+# MAGIC - Siivous
+# MAGIC - Nimi
+# MAGIC - Autolog
+# MAGIC - pip install git
 
 # COMMAND ----------
 
@@ -17,31 +26,43 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
+# Read data
+
 import pandas as pd
 
-#csv_url = "https://zenodo.org/record/4624805/files/NP.csv"
+# original source csv_url = "https://zenodo.org/record/4624805/files/NP.csv"
 csv_url = "file:../data/NP.csv"
-df = pd.read_csv(csv_url)
-df = df.rename(columns=(lambda col_name: col_name.strip()))
-display(df)
+df = pd.read_csv(csv_url) # read csv
+df = df.rename(columns=(lambda col_name: col_name.strip())) # clean up column names
+df.display()
 
 # COMMAND ----------
 
-# Hide imports in own cell
-from sklearn.pipeline import Pipeline
-from sklearn.base import BaseEstimator, TransformerMixin
+# Standard imports
+
+# python imports
 from dataclasses import dataclass
 from typing import List, Tuple, Dict
+
+# sklearn pipeline
+from sklearn.pipeline import Pipeline
+from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.linear_model import TheilSenRegressor
+
+# numpy and pandas
 import numpy as np
 import pandas as pd
 from numpy.typing import ArrayLike
 
-from sklearn.linear_model import TheilSenRegressor
-
+# mlflow
 import mlflow
 from mlflow.models import infer_signature
 from mlflow.models import ModelSignature, infer_signature
 from mlflow.types.schema import Schema, ColSpec, TensorSpec
+
+
+# COMMAND ----------
+
 
 """
   {
