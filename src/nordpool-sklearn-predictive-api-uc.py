@@ -1,15 +1,14 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # Nordpool sklearn predictive API
+# MAGIC # Nordpool sklearn predictive API - Unity catalog
 # MAGIC
 # MAGIC See [README.md](../README.md) for description.
 # MAGIC
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC # ToDo
-# MAGIC - Unity Catalog
+# MAGIC %pip install "mlflow-skinny[databricks]>=2.4.1"
+# MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -26,12 +25,14 @@ df = pd.read_csv(csv_url) # read csv
 df = df.rename(columns=(lambda col_name: col_name.strip())) # clean up column names
 df.display()
 
-# plot
+# plot full data
 fig = plt.figure()
-sns.lineplot(x=pd.to_datetime(df["Date"]), y=df["Price"])
-fig = plt.figure()
+sns.lineplot(x=pd.to_datetime(df["Date"]), y=df["Price"], linewidth=.5)
+
+# plot the last month
 N_plot = 30*24
-sns.lineplot(x=pd.to_datetime(df["Date"])[-N_plot:], y=df["Price"][-N_plot:])
+fig = plt.figure()
+sns.lineplot(x=pd.to_datetime(df["Date"])[-N_plot:], y=df["Price"][-N_plot:], linewidth=1)
 plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date
 
 
@@ -255,8 +256,8 @@ df_pred["Last Date"] = [window["Date"].values[-1] for window in pred_windows]
 df_pred.display()
 
 fig = plt.figure()
-sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Next Price"][-N_plot:])
-sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:])
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Next Price"][-N_plot:], linewidth=1)
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:], linewidth=1)
 plt.xlabel("Date")
 plt.ylabel("Price vs Fitted")
 plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date
@@ -264,9 +265,24 @@ plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # eve
 
 # COMMAND ----------
 
+# NOTE: Skip this if using Unity Catalog and run the next cell
+#
 # Go to 'Experiments' tab and select this experiment 'nordpool-sklearn-predictive-api'
 # Select this run (the latest?) and click the model and examine it
 # Press 'Register model', select Workspace Model Registry and 'nordpool' model
 # Go to 'Serving' tab and select 'nordpool' endpoint
 # Click 'Edit configuration' and update the version 
 
+
+# COMMAND ----------
+
+# Add model to Unity Catalog
+import mlflow
+catalog = "ml_example"
+schema = "ml_models"
+model_name = "nordpool"
+mlflow.set_registry_uri("databricks-uc")
+mlflow.register_model(
+    model_uri=f"runs:/{model_info.run_id}/model",
+    name=f"{catalog}.{schema}.{model_name}"
+)
