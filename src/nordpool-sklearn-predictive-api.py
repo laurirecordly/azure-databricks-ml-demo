@@ -7,12 +7,6 @@
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC # ToDo
-# MAGIC - Unity Catalog
-
-# COMMAND ----------
-
 # Read and plot data
 import pandas as pd
 import seaborn as sns
@@ -26,12 +20,14 @@ df = pd.read_csv(csv_url) # read csv
 df = df.rename(columns=(lambda col_name: col_name.strip())) # clean up column names
 df.display()
 
-# plot
+# plot full data
 fig = plt.figure()
-sns.lineplot(x=pd.to_datetime(df["Date"]), y=df["Price"])
-fig = plt.figure()
+sns.lineplot(x=pd.to_datetime(df["Date"]), y=df["Price"], linewidth=.5)
+
+# plot the last month
 N_plot = 30*24
-sns.lineplot(x=pd.to_datetime(df["Date"])[-N_plot:], y=df["Price"][-N_plot:])
+fig = plt.figure()
+sns.lineplot(x=pd.to_datetime(df["Date"])[-N_plot:], y=df["Price"][-N_plot:], linewidth=1)
 plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date
 
 
@@ -255,8 +251,8 @@ df_pred["Last Date"] = [window["Date"].values[-1] for window in pred_windows]
 df_pred.display()
 
 fig = plt.figure()
-sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Next Price"][-N_plot:])
-sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:])
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Next Price"][-N_plot:], linewidth=1)
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:], linewidth=1)
 plt.xlabel("Date")
 plt.ylabel("Price vs Fitted")
 plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date

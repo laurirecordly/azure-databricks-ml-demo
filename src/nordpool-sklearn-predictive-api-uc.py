@@ -257,7 +257,7 @@ df_pred.display()
 
 fig = plt.figure()
 sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Next Price"][-N_plot:], linewidth=1)
-sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:], linewidth=1)
+sns.lineplot(x=pd.to_datetime(df_pred["Last Date"])[-N_plot:], y=df_pred["Pred Price"][-N_plot:], linewidth=.5)
 plt.xlabel("Date")
 plt.ylabel("Price vs Fitted")
 plt.gca().xaxis.set_major_locator(matplotlib.dates.DayLocator(interval=7)) # every 7th date
